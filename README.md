@@ -29,7 +29,17 @@ php artisan vendor:publish --tag=sms-config
 
 ## Configuration
 
-Set the default driver and credentials in your `.env`:
+Set `SMS_DRIVER` to the gateway you want, then fill in that driver's credentials. `SMS_DRIVER` defaults to `log`, so nothing breaks in local/testing environments without gateway credentials. See [`config/sms.php`](config/sms.php) for every option, including per-driver `base_url` overrides.
+
+### Log (default)
+
+Writes each SMS to the application log instead of sending it — the default when `SMS_DRIVER` is unset, no configuration needed.
+
+```env
+SMS_DRIVER=log
+```
+
+### BulkSMSBD
 
 ```env
 SMS_DRIVER=bulksmsbd
@@ -38,7 +48,26 @@ BULKSMSBD_API_KEY=your-api-key
 BULKSMSBD_SENDER_ID=your-sender-id
 ```
 
-Or, for Alpha SMS:
+### MimSMS
+
+```env
+SMS_DRIVER=mimsms
+
+MIMSMS_USERNAME=your-account-email
+MIMSMS_API_KEY=your-api-key
+MIMSMS_SENDER_ID=your-sender-id
+```
+
+### SSL Wireless
+
+```env
+SMS_DRIVER=sslwireless
+
+SSLWIRELESS_API_TOKEN=your-api-token
+SSLWIRELESS_SID=your-sid
+```
+
+### Alpha SMS
 
 ```env
 SMS_DRIVER=alphasms
@@ -47,7 +76,7 @@ ALPHASMS_API_KEY=your-api-key
 ALPHASMS_SENDER_ID=your-sender-id
 ```
 
-Or, for GreenWeb BD:
+### GreenWeb BD
 
 ```env
 SMS_DRIVER=greenweb
@@ -55,7 +84,33 @@ SMS_DRIVER=greenweb
 GREENWEB_TOKEN=your-token
 ```
 
-See [`config/sms.php`](config/sms.php) for every driver's options. `SMS_DRIVER` defaults to `log`, so nothing breaks in local/testing environments without gateway credentials.
+### Any other gateway (generic HTTP driver)
+
+For any REST gateway without a first-class driver (Elitbuzz, REVE Systems, etc.), configure the `http` driver directly in [`config/sms.php`](config/sms.php) — no code required. Use `{to}` and `{message}` as placeholders anywhere in the payload:
+
+```php
+'http' => [
+    'url' => env('SMS_HTTP_URL'),
+    'method' => 'post',
+    'query' => [],
+    'payload' => [
+        'api_key' => env('SMS_HTTP_API_KEY'),
+        'to' => '{to}',
+        'message' => '{message}',
+    ],
+    'success_path' => 'status',
+    'success_value' => 'success',
+],
+```
+
+```env
+SMS_DRIVER=http
+
+SMS_HTTP_URL=https://gateway.example.com/send
+SMS_HTTP_API_KEY=your-api-key
+```
+
+`success_path` is a dot-notation path into the JSON response (via `data_get()`); the send is considered successful when the value there loosely equals `success_value`. Omit both to just check the HTTP response status. This driver's `balance()` always returns `null` since there's no generic way to know a gateway's balance endpoint.
 
 ## Sending SMS
 
@@ -110,7 +165,7 @@ public function routeNotificationForSms(Notification $notification): string
 
 ## Adding your own gateway
 
-Either configure the generic `http` driver (no code required — see the commented example in [`config/sms.php`](config/sms.php)), or register a custom one:
+For anything the generic `http` driver (see [Configuration](#configuration)) can't express, register a custom driver:
 
 ```php
 use AmdadulHaq\BdSms\Facades\Sms;
