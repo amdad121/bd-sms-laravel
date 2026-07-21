@@ -1,0 +1,21 @@
+<?php
+
+declare(strict_types=1);
+
+use AmdadulHaq\BdSms\Notifications\SmsMessage;
+
+it('creates a message with content and casts to string', function (): void {
+    $message = SmsMessage::create('Your OTP is 4242');
+
+    expect((string) $message)->toBe('Your OTP is 4242');
+});
+
+it('creates an empty message by default', function (): void {
+    expect((string) SmsMessage::create())->toBe('');
+});
+
+it('allows setting content after creation', function (): void {
+    $message = SmsMessage::create('first')->content('second');
+
+    expect((string) $message)->toBe('second');
+});
