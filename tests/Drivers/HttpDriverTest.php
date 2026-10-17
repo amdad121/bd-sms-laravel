@@ -20,7 +20,7 @@ it('substitutes {to} and {message} placeholders and posts as json by default', f
 
     $result = $driver->send('01700000000', 'Hello there');
 
-    expect($result)->toBeTrue();
+    expect($result->accepted)->toBeTrue();
 
     Http::assertSent(fn ($request): bool => $request->url() === 'https://example.test/send'
         && $request['api_key'] === 'secret'
@@ -81,7 +81,7 @@ it('without a success path, treats any successful http response as sent', functi
 
     $driver = new HttpDriver(url: 'https://example.test/send', method: 'post', payload: []);
 
-    expect($driver->send('01700000000', 'Hello'))->toBeTrue();
+    expect($driver->send('01700000000', 'Hello')->accepted)->toBeTrue();
 });
 
 it('without a success path, treats a non-2xx http response as failure', function (): void {
@@ -89,7 +89,7 @@ it('without a success path, treats a non-2xx http response as failure', function
 
     $driver = new HttpDriver(url: 'https://example.test/send', method: 'post', payload: []);
 
-    expect($driver->send('01700000000', 'Hello'))->toBeFalse();
+    expect($driver->send('01700000000', 'Hello')->failed())->toBeTrue();
 });
 
 it('with a success path, only succeeds when the value matches', function (): void {
@@ -103,7 +103,7 @@ it('with a success path, only succeeds when the value matches', function (): voi
         successValue: 'success',
     );
 
-    expect($driver->send('01700000000', 'Hello'))->toBeTrue();
+    expect($driver->send('01700000000', 'Hello')->accepted)->toBeTrue();
 });
 
 it('with a success path, fails when the value does not match', function (): void {
@@ -117,11 +117,24 @@ it('with a success path, fails when the value does not match', function (): void
         successValue: 'success',
     );
 
-    expect($driver->send('01700000000', 'Hello'))->toBeFalse();
+    expect($driver->send('01700000000', 'Hello')->failed())->toBeTrue();
 });
 
 it('has no balance support', function (): void {
     $driver = new HttpDriver(url: 'https://example.test/send', method: 'post', payload: []);
 
     expect($driver->balance())->toBeNull();
+});
+
+it('reads the message id from the configured path', function (): void {
+    Http::fake(['example.test/send' => Http::response(['data' => ['id' => 'abc-1']])]);
+
+    $driver = new HttpDriver(
+        url: 'https://example.test/send',
+        method: 'post',
+        payload: ['to' => '{to}'],
+        messageIdPath: 'data.id',
+    );
+
+    expect($driver->send('01700000000', 'Hello')->messageId)->toBe('abc-1');
 });

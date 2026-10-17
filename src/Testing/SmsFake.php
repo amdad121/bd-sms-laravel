@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AmdadulHaq\BdSms\Testing;
 
 use AmdadulHaq\BdSms\Contracts\SmsDriver;
+use AmdadulHaq\BdSms\SmsResult;
 use Closure;
 use Illuminate\Support\Collection;
 use PHPUnit\Framework\Assert as PHPUnit;
@@ -20,16 +21,38 @@ class SmsFake implements SmsDriver
      */
     private array $sent = [];
 
-    public function send(string $to, string $message): bool
+    /**
+     * @var (Closure(string, string): bool)|null
+     */
+    private ?Closure $failWhen = null;
+
+    /**
+     * Make sends return a rejected result, either every send or only those
+     * matching the given truth test. Rejected sends are not recorded as sent.
+     *
+     * @param  (Closure(string, string): bool)|null  $callback
+     */
+    public function fail(?Closure $callback = null): self
     {
+        $this->failWhen = $callback ?? fn (): bool => true;
+
+        return $this;
+    }
+
+    public function send(string $to, string $message): SmsResult
+    {
+        if ($this->failWhen instanceof Closure && ($this->failWhen)($to, $message)) {
+            return SmsResult::rejected('fake', 'Rejected by Sms::fake()->fail().');
+        }
+
         $this->sent[] = ['to' => $to, 'message' => $message];
 
-        return true;
+        return SmsResult::accepted('fake-'.count($this->sent));
     }
 
     /**
      * @param  array<int, string>  $to
-     * @return array<string, bool>
+     * @return array<string, SmsResult>
      */
     public function sendMany(array $to, string $message): array
     {
@@ -40,6 +63,15 @@ class SmsFake implements SmsDriver
         }
 
         return $results;
+    }
+
+    /**
+     * Lets code that picks a gateway, e.g. Sms::driver('mimsms')->send(), run
+     * against the fake, which records sends from every driver together.
+     */
+    public function driver(?string $driver = null): self
+    {
+        return $this;
     }
 
     public function balance(): ?float

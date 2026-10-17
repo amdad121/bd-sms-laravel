@@ -6,8 +6,9 @@ namespace AmdadulHaq\BdSms\Drivers;
 
 use AmdadulHaq\BdSms\Contracts\SmsDriver;
 use AmdadulHaq\BdSms\Drivers\Concerns\NormalizesBangladeshiNumbers;
+use AmdadulHaq\BdSms\Drivers\Concerns\ReadsGatewayResponses;
+use AmdadulHaq\BdSms\SmsResult;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -17,30 +18,38 @@ use Throwable;
 class SslWirelessDriver implements SmsDriver
 {
     use NormalizesBangladeshiNumbers;
+    use ReadsGatewayResponses;
 
     public function __construct(
         private readonly string $baseUrl,
         private readonly string $apiToken,
         private readonly string $sid,
+        private readonly int $timeout = 10,
     ) {}
 
-    public function send(string $to, string $message): bool
+    public function send(string $to, string $message): SmsResult
     {
-        $response = Http::asJson()->post(Str::finish($this->baseUrl, '/').'api/v3/send-sms', [
+        $csmsId = (string) Str::uuid();
+
+        $response = Http::timeout($this->timeout)->asJson()->post(Str::finish($this->baseUrl, '/').'api/v3/send-sms', [
             'api_token' => $this->apiToken,
             'sid' => $this->sid,
             'msisdn' => $this->normalizeNumber($to),
             'sms' => $message,
-            'csms_id' => (string) Str::uuid(),
+            'csms_id' => $csmsId,
         ]);
 
-        $success = Str::contains((string) data_get($response->json(), 'status', ''), 'SUCCESS', ignoreCase: true);
+        $body = $this->responseBody($response);
 
-        if (! $success) {
-            Log::warning('SSL Wireless rejected an SMS.', ['body' => $response->body()]);
+        if (! Str::contains((string) data_get($body, 'status', ''), 'SUCCESS', ignoreCase: true)) {
+            return SmsResult::rejected(
+                errorCode: $this->stringOrNull(data_get($body, 'status_code')) ?? (string) $response->status(),
+                errorMessage: $this->stringOrNull(data_get($body, 'error_message')),
+                response: $body,
+            );
         }
 
-        return $success;
+        return SmsResult::accepted($this->stringOrNull(data_get($body, 'smsinfo.0.reference_id')) ?? $csmsId, $body);
     }
 
     /**
@@ -52,18 +61,16 @@ class SslWirelessDriver implements SmsDriver
     public function balance(): ?float
     {
         try {
-            $response = Http::get(Str::finish($this->baseUrl, '/').'api/balance', [
+            $response = Http::timeout($this->timeout)->get(Str::finish($this->baseUrl, '/').'api/balance', [
                 'api_token' => $this->apiToken,
                 'sid' => $this->sid,
             ]);
-
-            $balance = data_get($response->json(), 'balance');
-
-            return is_numeric($balance) ? (float) $balance : null;
-        } catch (Throwable $throwable) {
-            Log::warning('SSL Wireless balance check failed.', ['message' => $throwable->getMessage()]);
-
+        } catch (Throwable) {
             return null;
         }
+
+        $balance = data_get($response->json(), 'balance');
+
+        return is_numeric($balance) ? (float) $balance : null;
     }
 }

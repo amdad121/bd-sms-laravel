@@ -22,7 +22,7 @@ it('sends an sms and normalizes the recipient number', function (): void {
 
     $result = $this->driver->send('01700000000', 'Hello there');
 
-    expect($result)->toBeTrue();
+    expect($result->accepted)->toBeTrue();
 
     Http::assertSent(fn ($request): bool => $request->url() === 'http://api.greenweb.com.bd/api.php'
         && $request['token'] === 'test-token'
@@ -30,14 +30,14 @@ it('sends an sms and normalizes the recipient number', function (): void {
         && $request['message'] === 'Hello there');
 });
 
-it('returns false when the gateway reports a failed status', function (): void {
+it('returns a failed result when the gateway reports a failed status', function (): void {
     Http::fake([
         'api.greenweb.com.bd/api.php' => Http::response([
             ['to' => '+8801700000000', 'message' => 'Hello', 'status' => 'FAILED', 'statusmsg' => 'Invalid Number'],
         ]),
     ]);
 
-    expect($this->driver->send('01700000000', 'Hello'))->toBeFalse();
+    expect($this->driver->send('01700000000', 'Hello')->failed())->toBeTrue();
 });
 
 it('reads the balance from the gateway', function (): void {
@@ -54,4 +54,20 @@ it('returns null balance instead of throwing when the request fails', function (
     ]);
 
     expect($this->driver->balance())->toBeNull();
+});
+
+it('returns the gateway message id when it accepts', function (): void {
+    Http::fake(['api.greenweb.com.bd/api.php' => Http::response([['to' => '8801700000000', 'status' => 'SENT', 'statusmsg' => 'SMS Sent Successfully']])]);
+
+    expect($this->driver->send('01700000000', 'Hello')->messageId)->toBe(null);
+});
+
+it('returns the gateway error code and message when it rejects', function (): void {
+    Http::fake(['api.greenweb.com.bd/api.php' => Http::response([['to' => '8801700000000', 'status' => 'FAILED', 'statusmsg' => 'Invalid Number']])]);
+
+    $result = $this->driver->send('01700000000', 'Hello');
+
+    expect($result->failed())->toBeTrue()
+        ->and($result->errorCode)->toBe('FAILED')
+        ->and($result->errorMessage)->toBe('Invalid Number');
 });

@@ -21,6 +21,18 @@ return [
 
     'default' => env('SMS_DRIVER', 'log'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Gateway Timeout
+    |--------------------------------------------------------------------------
+    |
+    | Seconds to wait for a gateway before giving up, so a hanging gateway
+    | cannot block a request or queue worker. Applies to every HTTP driver.
+    |
+    */
+
+    'timeout' => (int) env('SMS_TIMEOUT', 10),
+
     'drivers' => [
 
         'bulksmsbd' => [
@@ -68,6 +80,7 @@ return [
         //     ],
         //     'success_path' => 'status',
         //     'success_value' => 'success',
+        //     'message_id_path' => 'data.id',
         // ],
 
     ],

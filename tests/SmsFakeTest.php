@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use AmdadulHaq\BdSms\Facades\Sms;
+use AmdadulHaq\BdSms\SmsResult;
 use AmdadulHaq\BdSms\Testing\SmsFake;
 use PHPUnit\Framework\ExpectationFailedException;
 
@@ -67,4 +68,30 @@ it('does not fake other manager methods like balance', function (): void {
     Sms::fake();
 
     expect(Sms::balance())->toBeNull();
+});
+
+it('rejects every send once told to fail, without recording them as sent', function (): void {
+    Sms::fake()->fail();
+
+    expect(Sms::send('017-111-1111', 'Hi')->failed())->toBeTrue();
+
+    Sms::assertNothingSent();
+});
+
+it('rejects only the sends matching the failure truth test', function (): void {
+    Sms::fake()->fail(fn (string $to): bool => $to === '018-222-2222');
+
+    expect(array_map(fn (SmsResult $result): bool => $result->accepted, Sms::sendMany(['017-111-1111', '018-222-2222'], 'Hi')))
+        ->toBe(['017-111-1111' => true, '018-222-2222' => false]);
+
+    Sms::assertSentCount(1);
+    Sms::assertSentTo('017-111-1111');
+});
+
+it('records sends made through a named driver', function (): void {
+    Sms::fake();
+
+    Sms::driver('mimsms')->send('017-111-1111', 'Hi');
+
+    Sms::assertSentTo('017-111-1111');
 });

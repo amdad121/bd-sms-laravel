@@ -21,7 +21,7 @@ it('sends an sms and normalizes the recipient number', function (): void {
 
     $result = $this->driver->send('01700000000', 'Hello there');
 
-    expect($result)->toBeTrue();
+    expect($result->accepted)->toBeTrue();
 
     Http::assertSent(fn ($request): bool => $request->url() === 'https://smsplus.sslwireless.com/api/v3/send-sms'
         && $request['api_token'] === 'test-token'
@@ -31,12 +31,12 @@ it('sends an sms and normalizes the recipient number', function (): void {
         && is_string($request['csms_id']));
 });
 
-it('returns false when the gateway status is not SUCCESS', function (): void {
+it('returns a failed result when the gateway status is not SUCCESS', function (): void {
     Http::fake([
         'smsplus.sslwireless.com/api/v3/send-sms' => Http::response(['status' => 'FAILED']),
     ]);
 
-    expect($this->driver->send('01700000000', 'Hello'))->toBeFalse();
+    expect($this->driver->send('01700000000', 'Hello')->failed())->toBeTrue();
 });
 
 it('reads the balance from the gateway', function (): void {
@@ -53,4 +53,20 @@ it('returns null balance instead of throwing when the request fails', function (
     ]);
 
     expect($this->driver->balance())->toBeNull();
+});
+
+it('returns the gateway message id when it accepts', function (): void {
+    Http::fake(['smsplus.sslwireless.com/api/v3/send-sms' => Http::response(['status' => 'SUCCESS', 'status_code' => 200, 'smsinfo' => [['reference_id' => 'REF-7']]])]);
+
+    expect($this->driver->send('01700000000', 'Hello')->messageId)->toBe('REF-7');
+});
+
+it('returns the gateway error code and message when it rejects', function (): void {
+    Http::fake(['smsplus.sslwireless.com/api/v3/send-sms' => Http::response(['status' => 'FAILED', 'status_code' => 4001, 'error_message' => 'Unauthorized'])]);
+
+    $result = $this->driver->send('01700000000', 'Hello');
+
+    expect($result->failed())->toBeTrue()
+        ->and($result->errorCode)->toBe('4001')
+        ->and($result->errorMessage)->toBe('Unauthorized');
 });

@@ -14,10 +14,14 @@ use AmdadulHaq\BdSms\Drivers\MimSmsDriver;
 use AmdadulHaq\BdSms\Drivers\SslWirelessDriver;
 use AmdadulHaq\BdSms\Facades\Sms;
 use AmdadulHaq\BdSms\Testing\SmsFake;
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Manager;
+use InvalidArgumentException;
 
 /**
- * @mixin SmsDriver
+ * @mixin SmsSender
+ *
+ * @method SmsSender driver(string|null $driver = null)
  */
 class SmsManager extends Manager implements SmsDriver
 {
@@ -39,6 +43,7 @@ class SmsManager extends Manager implements SmsDriver
             baseUrl: $config['base_url'] ?? 'https://bulksmsbd.net',
             apiKey: $config['api_key'] ?? '',
             senderId: $config['sender_id'] ?? '',
+            timeout: $this->timeout(),
         );
     }
 
@@ -51,6 +56,7 @@ class SmsManager extends Manager implements SmsDriver
             username: $config['username'] ?? '',
             apiKey: $config['api_key'] ?? '',
             senderId: $config['sender_id'] ?? '',
+            timeout: $this->timeout(),
         );
     }
 
@@ -62,6 +68,7 @@ class SmsManager extends Manager implements SmsDriver
             baseUrl: $config['base_url'] ?? 'https://smsplus.sslwireless.com',
             apiToken: $config['api_token'] ?? '',
             sid: $config['sid'] ?? '',
+            timeout: $this->timeout(),
         );
     }
 
@@ -73,6 +80,7 @@ class SmsManager extends Manager implements SmsDriver
             baseUrl: $config['base_url'] ?? 'https://api.sms.net.bd',
             apiKey: $config['api_key'] ?? '',
             senderId: $config['sender_id'] ?? null,
+            timeout: $this->timeout(),
         );
     }
 
@@ -83,6 +91,7 @@ class SmsManager extends Manager implements SmsDriver
         return new GreenWebDriver(
             baseUrl: $config['base_url'] ?? 'http://api.greenweb.com.bd',
             token: $config['token'] ?? '',
+            timeout: $this->timeout(),
         );
     }
 
@@ -97,40 +106,62 @@ class SmsManager extends Manager implements SmsDriver
             query: $config['query'] ?? [],
             successPath: $config['success_path'] ?? null,
             successValue: $config['success_value'] ?? null,
+            messageIdPath: $config['message_id_path'] ?? null,
+            timeout: $this->timeout(),
+        );
+    }
+
+    private function timeout(): int
+    {
+        return (int) $this->config->get('sms.timeout', 10);
+    }
+
+    /**
+     * Wrap every resolved driver, including custom ones from extend(), in an
+     * SmsSender so events are dispatched however the driver is reached.
+     *
+     * @param  string  $driver
+     */
+    protected function createDriver($driver): SmsSender
+    {
+        $resolved = parent::createDriver($driver);
+
+        if (! $resolved instanceof SmsDriver) {
+            throw new InvalidArgumentException(sprintf('SMS driver [%s] must implement %s.', $driver, SmsDriver::class));
+        }
+
+        return new SmsSender(
+            $driver,
+            $resolved,
+            $this->container->bound(Dispatcher::class) ? $this->container->make(Dispatcher::class) : null,
         );
     }
 
     /**
-     * Send an SMS using the default (or currently resolved) driver.
+     * Send an SMS using the default driver.
      */
-    public function send(string $to, string $message): bool
+    public function send(string $to, string $message): SmsResult
     {
         return $this->driver()->send($to, $message);
     }
 
     /**
-     * Get the remaining prepaid balance on the current gateway account, or null if unavailable.
+     * Send the same message to multiple recipients using the default driver.
+     *
+     * @param  array<int, string>  $to
+     * @return array<string, SmsResult>
+     */
+    public function sendMany(array $to, string $message): array
+    {
+        return $this->driver()->sendMany($to, $message);
+    }
+
+    /**
+     * Get the remaining prepaid balance on the default gateway account, or null if unavailable.
      */
     public function balance(): ?float
     {
         return $this->driver()->balance();
-    }
-
-    /**
-     * Send the same message to multiple recipients, returning each recipient's result.
-     *
-     * @param  array<int, string>  $to
-     * @return array<string, bool>
-     */
-    public function sendMany(array $to, string $message): array
-    {
-        $results = [];
-
-        foreach ($to as $recipient) {
-            $results[$recipient] = $this->send($recipient, $message);
-        }
-
-        return $results;
     }
 
     /**

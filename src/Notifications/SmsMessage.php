@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace AmdadulHaq\BdSms\Notifications;
 
+use AmdadulHaq\BdSms\Support\SmsSegments;
 use Stringable;
 
 class SmsMessage implements Stringable
@@ -20,6 +21,11 @@ class SmsMessage implements Stringable
         $this->content = $content;
 
         return $this;
+    }
+
+    public function segments(): int
+    {
+        return SmsSegments::count($this->content);
     }
 
     public function __toString(): string

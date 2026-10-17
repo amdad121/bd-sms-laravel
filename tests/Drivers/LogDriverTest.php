@@ -15,7 +15,7 @@ it('logs the message and reports success without dispatching anything', function
 
     $driver = new LogDriver;
 
-    expect($driver->send('01700000000', 'Hello'))->toBeTrue();
+    expect($driver->send('01700000000', 'Hello')->accepted)->toBeTrue();
 });
 
 it('has no balance', function (): void {

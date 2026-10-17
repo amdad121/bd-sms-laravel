@@ -6,8 +6,9 @@ namespace AmdadulHaq\BdSms\Drivers;
 
 use AmdadulHaq\BdSms\Contracts\SmsDriver;
 use AmdadulHaq\BdSms\Drivers\Concerns\NormalizesBangladeshiNumbers;
+use AmdadulHaq\BdSms\Drivers\Concerns\ReadsGatewayResponses;
+use AmdadulHaq\BdSms\SmsResult;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 
 /**
  * Generic, config-only driver for any REST-based SMS gateway that isn't
@@ -19,6 +20,7 @@ use Illuminate\Support\Facades\Log;
 class HttpDriver implements SmsDriver
 {
     use NormalizesBangladeshiNumbers;
+    use ReadsGatewayResponses;
 
     /**
      * @param  array<string, mixed>  $payload
@@ -31,26 +33,31 @@ class HttpDriver implements SmsDriver
         private readonly array $query = [],
         private readonly ?string $successPath = null,
         private readonly mixed $successValue = null,
+        private readonly ?string $messageIdPath = null,
+        private readonly int $timeout = 10,
     ) {}
 
-    public function send(string $to, string $message): bool
+    public function send(string $to, string $message): SmsResult
     {
         $payload = $this->resolvePlaceholders($this->payload, $to, $message);
 
-        $response = Http::asJson()
+        $response = Http::timeout($this->timeout)
+            ->asJson()
             ->{strtolower($this->method)}($this->url.($this->query !== [] ? '?'.http_build_query($this->query) : ''), $payload);
 
-        if ($this->successPath === null) {
-            return $response->successful();
-        }
+        $body = $this->responseBody($response);
 
-        $success = $response->successful() && data_get($response->json(), $this->successPath) == $this->successValue;
+        $success = $response->successful()
+            && ($this->successPath === null || data_get($body, $this->successPath) == $this->successValue);
 
         if (! $success) {
-            Log::warning('SMS gateway rejected an SMS.', ['url' => $this->url, 'body' => $response->body()]);
+            return SmsResult::rejected(errorCode: (string) $response->status(), response: $body);
         }
 
-        return $success;
+        return SmsResult::accepted(
+            $this->messageIdPath !== null ? $this->stringOrNull(data_get($body, $this->messageIdPath)) : null,
+            $body,
+        );
     }
 
     public function balance(): ?float

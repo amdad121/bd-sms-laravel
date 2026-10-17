@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AmdadulHaq\BdSms\Notifications;
 
 use AmdadulHaq\BdSms\Contracts\SmsDriver;
+use AmdadulHaq\BdSms\Exceptions\CouldNotSendSms;
 use Illuminate\Notifications\Notification;
 
 class SmsChannel
@@ -13,6 +14,11 @@ class SmsChannel
 
     /**
      * Send the notification's SMS message via the configured gateway.
+     *
+     * Throwing on a rejection lets Laravel dispatch NotificationFailed and lets
+     * queued notifications fail and retry instead of passing silently.
+     *
+     * @throws CouldNotSendSms
      */
     public function send(object $notifiable, Notification $notification): void
     {
@@ -36,6 +42,10 @@ class SmsChannel
             return;
         }
 
-        $this->sms->send($to, $message);
+        $result = $this->sms->send($to, $message);
+
+        if ($result->failed()) {
+            throw CouldNotSendSms::rejected($notification, $result);
+        }
     }
 }

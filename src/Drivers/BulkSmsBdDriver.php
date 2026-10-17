@@ -6,8 +6,9 @@ namespace AmdadulHaq\BdSms\Drivers;
 
 use AmdadulHaq\BdSms\Contracts\SmsDriver;
 use AmdadulHaq\BdSms\Drivers\Concerns\NormalizesBangladeshiNumbers;
+use AmdadulHaq\BdSms\Drivers\Concerns\ReadsGatewayResponses;
+use AmdadulHaq\BdSms\SmsResult;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -17,21 +18,23 @@ use Throwable;
 class BulkSmsBdDriver implements SmsDriver
 {
     use NormalizesBangladeshiNumbers;
+    use ReadsGatewayResponses;
 
     /**
      * BulkSMSBD success response code (202 — SMS Submitted Successfully).
      */
-    private const SUCCESS_CODE = 202;
+    private const int SUCCESS_CODE = 202;
 
     public function __construct(
         private readonly string $baseUrl,
         private readonly string $apiKey,
         private readonly string $senderId,
+        private readonly int $timeout = 10,
     ) {}
 
-    public function send(string $to, string $message): bool
+    public function send(string $to, string $message): SmsResult
     {
-        $response = Http::asForm()->post(Str::finish($this->baseUrl, '/').'api/smsapi', [
+        $response = Http::timeout($this->timeout)->asForm()->post(Str::finish($this->baseUrl, '/').'api/smsapi', [
             'api_key' => $this->apiKey,
             'type' => 'text',
             'senderid' => $this->senderId,
@@ -39,18 +42,18 @@ class BulkSmsBdDriver implements SmsDriver
             'message' => $message,
         ]);
 
-        $code = (int) data_get($response->json(), 'response_code');
+        $body = $this->responseBody($response);
+        $code = (int) data_get($body, 'response_code');
 
         if ($code !== self::SUCCESS_CODE) {
-            Log::warning('BulkSMSBD rejected an SMS.', [
-                'response_code' => $code,
-                'body' => $response->body(),
-            ]);
-
-            return false;
+            return SmsResult::rejected(
+                errorCode: $code !== 0 ? (string) $code : (string) $response->status(),
+                errorMessage: $this->stringOrNull(data_get($body, 'error_message')),
+                response: $body,
+            );
         }
 
-        return true;
+        return SmsResult::accepted($this->stringOrNull(data_get($body, 'message_id')), $body);
     }
 
     /**
@@ -60,17 +63,15 @@ class BulkSmsBdDriver implements SmsDriver
     public function balance(): ?float
     {
         try {
-            $response = Http::get(Str::finish($this->baseUrl, '/').'api/getBalanceApi', [
+            $response = Http::timeout($this->timeout)->get(Str::finish($this->baseUrl, '/').'api/getBalanceApi', [
                 'api_key' => $this->apiKey,
             ]);
-
-            $balance = data_get($response->json(), 'balance');
-
-            return is_numeric($balance) ? (float) $balance : null;
-        } catch (Throwable $throwable) {
-            Log::warning('BulkSMSBD balance check failed.', ['message' => $throwable->getMessage()]);
-
+        } catch (Throwable) {
             return null;
         }
+
+        $balance = data_get($response->json(), 'balance');
+
+        return is_numeric($balance) ? (float) $balance : null;
     }
 }

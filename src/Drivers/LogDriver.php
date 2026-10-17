@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace AmdadulHaq\BdSms\Drivers;
 
 use AmdadulHaq\BdSms\Contracts\SmsDriver;
+use AmdadulHaq\BdSms\SmsResult;
 use Illuminate\Support\Facades\Log;
 
 /**
@@ -13,14 +14,14 @@ use Illuminate\Support\Facades\Log;
  */
 class LogDriver implements SmsDriver
 {
-    public function send(string $to, string $message): bool
+    public function send(string $to, string $message): SmsResult
     {
         Log::info('SMS (not sent — log driver).', [
             'to' => $to,
             'message' => $message,
         ]);
 
-        return true;
+        return SmsResult::accepted();
     }
 
     public function balance(): ?float

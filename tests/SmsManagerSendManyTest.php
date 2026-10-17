@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use AmdadulHaq\BdSms\Contracts\SmsDriver;
 use AmdadulHaq\BdSms\SmsManager;
+use AmdadulHaq\BdSms\SmsResult;
 
 it('sends to every recipient and reports each result keyed by recipient', function (): void {
     $driver = new class implements SmsDriver
@@ -11,11 +12,11 @@ it('sends to every recipient and reports each result keyed by recipient', functi
         /** @var array<int, string> */
         public array $sentTo = [];
 
-        public function send(string $to, string $message): bool
+        public function send(string $to, string $message): SmsResult
         {
             $this->sentTo[] = $to;
 
-            return $to !== '018-fails';
+            return $to === '018-fails' ? SmsResult::rejected('500') : SmsResult::accepted();
         }
 
         public function balance(): ?float
@@ -32,7 +33,7 @@ it('sends to every recipient and reports each result keyed by recipient', functi
     $results = $manager->sendMany(['017-ok', '018-fails', '019-ok'], 'Hello there');
 
     expect($driver->sentTo)->toBe(['017-ok', '018-fails', '019-ok'])
-        ->and($results)->toBe([
+        ->and(array_map(fn (SmsResult $result): bool => $result->accepted, $results))->toBe([
             '017-ok' => true,
             '018-fails' => false,
             '019-ok' => true,

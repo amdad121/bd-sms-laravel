@@ -19,3 +19,8 @@ it('allows setting content after creation', function (): void {
 
     expect((string) $message)->toBe('second');
 });
+
+it('reports how many billable parts the content splits into', function (): void {
+    expect(SmsMessage::create(str_repeat('a', 161))->segments())->toBe(2)
+        ->and(SmsMessage::create('আপনার কোড ৪২৪২')->segments())->toBe(1);
+});

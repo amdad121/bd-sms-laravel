@@ -21,7 +21,7 @@ it('sends an sms and normalizes the recipient number', function (): void {
 
     $result = $this->driver->send('01700000000', 'Hello there');
 
-    expect($result)->toBeTrue();
+    expect($result->accepted)->toBeTrue();
 
     Http::assertSent(fn ($request): bool => $request->url() === 'https://bulksmsbd.net/api/smsapi'
         && $request['api_key'] === 'test-api-key'
@@ -39,12 +39,12 @@ it('does not re-prefix a number that already has the country code', function ():
     Http::assertSent(fn ($request): bool => $request['number'] === '8801700000000');
 });
 
-it('returns false when the gateway rejects the sms', function (): void {
+it('returns a failed result when the gateway rejects the sms', function (): void {
     Http::fake([
         'bulksmsbd.net/api/smsapi' => Http::response(['response_code' => 1002]),
     ]);
 
-    expect($this->driver->send('01700000000', 'Hello'))->toBeFalse();
+    expect($this->driver->send('01700000000', 'Hello')->failed())->toBeTrue();
 });
 
 it('reads the balance from the gateway', function (): void {
@@ -69,4 +69,20 @@ it('returns null balance instead of throwing when the request fails', function (
     ]);
 
     expect($this->driver->balance())->toBeNull();
+});
+
+it('returns the gateway message id when it accepts', function (): void {
+    Http::fake(['bulksmsbd.net/api/smsapi' => Http::response(['response_code' => 202, 'message_id' => 81234, 'success_message' => 'SMS Submitted Successfully'])]);
+
+    expect($this->driver->send('01700000000', 'Hello')->messageId)->toBe('81234');
+});
+
+it('returns the gateway error code and message when it rejects', function (): void {
+    Http::fake(['bulksmsbd.net/api/smsapi' => Http::response(['response_code' => 1007, 'error_message' => 'Balance Insufficient'])]);
+
+    $result = $this->driver->send('01700000000', 'Hello');
+
+    expect($result->failed())->toBeTrue()
+        ->and($result->errorCode)->toBe('1007')
+        ->and($result->errorMessage)->toBe('Balance Insufficient');
 });

@@ -2,11 +2,15 @@
 
 declare(strict_types=1);
 
+use AmdadulHaq\BdSms\Exceptions\CouldNotSendSms;
 use AmdadulHaq\BdSms\Facades\Sms;
 use AmdadulHaq\BdSms\Notifications\SmsChannel;
 use AmdadulHaq\BdSms\Testing\SmsFake;
+use Illuminate\Notifications\Events\NotificationFailed;
+use Illuminate\Notifications\Events\NotificationSent;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Notifications\Notification;
+use Illuminate\Support\Facades\Event;
 
 class WelcomeNotification extends Notification
 {
@@ -94,4 +98,22 @@ it('prefers routeNotificationForSms over the phone property', function (): void 
     $recipient->notify(new WelcomeNotification);
 
     Sms::assertSentTo('018-000-0000');
+});
+
+it('throws when the gateway rejects the message', function (): void {
+    $channel = new SmsChannel((new SmsFake)->fail());
+
+    expect(fn () => $channel->send(new PlainRecipient('01700000000'), new WelcomeNotification))
+        ->toThrow(CouldNotSendSms::class, 'The SMS gateway rejected the [WelcomeNotification] notification: fake Rejected by Sms::fake()->fail().');
+});
+
+it('reports a rejected notification as failed rather than sent', function (): void {
+    Sms::fake()->fail();
+    Event::fake([NotificationSent::class, NotificationFailed::class]);
+
+    expect(fn () => (new RoutedRecipient('01700000000'))->notify(new WelcomeNotification))
+        ->toThrow(CouldNotSendSms::class);
+
+    Event::assertDispatched(NotificationFailed::class);
+    Event::assertNotDispatched(NotificationSent::class);
 });

@@ -12,10 +12,12 @@ use AmdadulHaq\BdSms\Drivers\MimSmsDriver;
 use AmdadulHaq\BdSms\Drivers\SslWirelessDriver;
 use AmdadulHaq\BdSms\Facades\Sms;
 use AmdadulHaq\BdSms\SmsManager;
+use AmdadulHaq\BdSms\SmsResult;
+use AmdadulHaq\BdSms\SmsSender;
 use Illuminate\Support\Facades\Http;
 
 it('defaults to the log driver', function (): void {
-    expect($this->app->make(SmsManager::class)->driver())->toBeInstanceOf(LogDriver::class);
+    expect($this->app->make(SmsManager::class)->driver()->getDriver())->toBeInstanceOf(LogDriver::class);
 });
 
 it('resolves the bulksmsbd driver from config', function (): void {
@@ -27,7 +29,8 @@ it('resolves the bulksmsbd driver from config', function (): void {
 
     $driver = $this->app->make(SmsManager::class)->driver('bulksmsbd');
 
-    expect($driver)->toBeInstanceOf(BulkSmsBdDriver::class);
+    expect($driver)->toBeInstanceOf(SmsSender::class)
+        ->and($driver->getDriver())->toBeInstanceOf(BulkSmsBdDriver::class);
 
     Http::fake(['custom.bulksmsbd.net/*' => Http::response(['response_code' => 202])]);
     $driver->send('01700000000', 'Hello');
@@ -44,7 +47,8 @@ it('resolves the mimsms driver from config', function (): void {
 
     $driver = $this->app->make(SmsManager::class)->driver('mimsms');
 
-    expect($driver)->toBeInstanceOf(MimSmsDriver::class);
+    expect($driver)->toBeInstanceOf(SmsSender::class)
+        ->and($driver->getDriver())->toBeInstanceOf(MimSmsDriver::class);
 
     Http::fake(['custom.mimsms.com/*' => Http::response(['status' => 'Success'])]);
     $driver->send('01700000000', 'Hello');
@@ -60,7 +64,8 @@ it('resolves the sslwireless driver from config', function (): void {
 
     $driver = $this->app->make(SmsManager::class)->driver('sslwireless');
 
-    expect($driver)->toBeInstanceOf(SslWirelessDriver::class);
+    expect($driver)->toBeInstanceOf(SmsSender::class)
+        ->and($driver->getDriver())->toBeInstanceOf(SslWirelessDriver::class);
 
     Http::fake(['custom.sslwireless.com/*' => Http::response(['status' => 'SUCCESS'])]);
     $driver->send('01700000000', 'Hello');
@@ -76,7 +81,8 @@ it('resolves the alphasms driver from config', function (): void {
 
     $driver = $this->app->make(SmsManager::class)->driver('alphasms');
 
-    expect($driver)->toBeInstanceOf(AlphaSmsDriver::class);
+    expect($driver)->toBeInstanceOf(SmsSender::class)
+        ->and($driver->getDriver())->toBeInstanceOf(AlphaSmsDriver::class);
 
     Http::fake(['custom.sms.net.bd/*' => Http::response(['error' => 0])]);
     $driver->send('01700000000', 'Hello');
@@ -91,7 +97,8 @@ it('resolves the greenweb driver from config', function (): void {
 
     $driver = $this->app->make(SmsManager::class)->driver('greenweb');
 
-    expect($driver)->toBeInstanceOf(GreenWebDriver::class);
+    expect($driver)->toBeInstanceOf(SmsSender::class)
+        ->and($driver->getDriver())->toBeInstanceOf(GreenWebDriver::class);
 
     Http::fake(['custom.greenweb.com.bd/*' => Http::response([['status' => 'SENT']])]);
     $driver->send('01700000000', 'Hello');
@@ -109,16 +116,17 @@ it('resolves the http driver from config', function (): void {
 
     $driver = $this->app->make(SmsManager::class)->driver('http');
 
-    expect($driver)->toBeInstanceOf(HttpDriver::class);
+    expect($driver)->toBeInstanceOf(SmsSender::class)
+        ->and($driver->getDriver())->toBeInstanceOf(HttpDriver::class);
 
     Http::fake(['custom.example/send' => Http::response(['status' => 'ok'])]);
-    expect($driver->send('01700000000', 'Hello'))->toBeTrue();
+    expect($driver->send('01700000000', 'Hello')->accepted)->toBeTrue();
 });
 
 it('uses the configured default driver', function (): void {
     config()->set('sms.default', 'log');
 
-    expect($this->app->make(SmsManager::class)->driver())->toBeInstanceOf(LogDriver::class);
+    expect($this->app->make(SmsManager::class)->driver()->getDriver())->toBeInstanceOf(LogDriver::class);
 });
 
 it('allows registering a custom driver via extend()', function (): void {
@@ -126,11 +134,11 @@ it('allows registering a custom driver via extend()', function (): void {
     {
         public bool $wasSent = false;
 
-        public function send(string $to, string $message): bool
+        public function send(string $to, string $message): SmsResult
         {
             $this->wasSent = true;
 
-            return true;
+            return SmsResult::accepted();
         }
 
         public function balance(): float
@@ -144,7 +152,7 @@ it('allows registering a custom driver via extend()', function (): void {
 
     config()->set('sms.default', 'custom');
 
-    expect($manager->send('01700000000', 'Hello'))->toBeTrue()
+    expect($manager->send('01700000000', 'Hello')->accepted)->toBeTrue()
         ->and($custom->wasSent)->toBeTrue()
         ->and($manager->balance())->toBe(99.0);
 });
@@ -152,6 +160,14 @@ it('allows registering a custom driver via extend()', function (): void {
 it('proxies send() and balance() through the facade to the default driver', function (): void {
     config()->set('sms.default', 'log');
 
-    expect(Sms::send('01700000000', 'Hello'))->toBeTrue()
+    expect(Sms::send('01700000000', 'Hello')->accepted)->toBeTrue()
         ->and(Sms::balance())->toBeNull();
+});
+
+it('rejects a custom driver that does not implement the driver contract', function (): void {
+    $manager = $this->app->make(SmsManager::class);
+    $manager->extend('broken', fn (): object => new stdClass);
+
+    expect(fn (): SmsSender => $manager->driver('broken'))
+        ->toThrow(InvalidArgumentException::class, 'SMS driver [broken] must implement');
 });

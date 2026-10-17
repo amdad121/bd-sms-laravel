@@ -6,44 +6,48 @@ namespace AmdadulHaq\BdSms\Drivers;
 
 use AmdadulHaq\BdSms\Contracts\SmsDriver;
 use AmdadulHaq\BdSms\Drivers\Concerns\NormalizesBangladeshiNumbers;
+use AmdadulHaq\BdSms\Drivers\Concerns\ReadsGatewayResponses;
+use AmdadulHaq\BdSms\SmsResult;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
 
 /**
- * Driver for GreenWeb BD (https://greenweb.com.bd).
+ * Driver for GreenWeb BD (https://greenweb.com.bd). Its send response carries
+ * no message id.
  */
 class GreenWebDriver implements SmsDriver
 {
     use NormalizesBangladeshiNumbers;
+    use ReadsGatewayResponses;
 
     public function __construct(
         private readonly string $baseUrl,
         private readonly string $token,
+        private readonly int $timeout = 10,
     ) {}
 
-    public function send(string $to, string $message): bool
+    public function send(string $to, string $message): SmsResult
     {
-        $response = Http::asForm()->post(Str::finish($this->baseUrl, '/').'api.php', [
+        $response = Http::timeout($this->timeout)->asForm()->post(Str::finish($this->baseUrl, '/').'api.php', [
             'token' => $this->token,
             'to' => $this->normalizeNumber($to),
             'message' => $message,
             'json' => 1,
         ]);
 
-        $status = data_get($response->json(), '0.status');
+        $body = $this->responseBody($response);
+        $status = data_get($body, '0.status');
 
         if ($status !== 'SENT') {
-            Log::warning('GreenWeb BD rejected an SMS.', [
-                'status' => $status,
-                'body' => $response->body(),
-            ]);
-
-            return false;
+            return SmsResult::rejected(
+                errorCode: $this->stringOrNull($status) ?? (string) $response->status(),
+                errorMessage: $this->stringOrNull(data_get($body, '0.statusmsg')),
+                response: $body,
+            );
         }
 
-        return true;
+        return SmsResult::accepted(response: $body);
     }
 
     /**
@@ -53,19 +57,17 @@ class GreenWebDriver implements SmsDriver
     public function balance(): ?float
     {
         try {
-            $response = Http::get(Str::finish($this->baseUrl, '/').'g_api.php', [
+            $response = Http::timeout($this->timeout)->get(Str::finish($this->baseUrl, '/').'g_api.php', [
                 'token' => $this->token,
                 'balance' => '',
                 'json' => 1,
             ]);
-
-            $balance = data_get($response->json(), 'balance');
-
-            return is_numeric($balance) ? (float) $balance : null;
-        } catch (Throwable $throwable) {
-            Log::warning('GreenWeb BD balance check failed.', ['message' => $throwable->getMessage()]);
-
+        } catch (Throwable) {
             return null;
         }
+
+        $balance = data_get($response->json(), 'balance');
+
+        return is_numeric($balance) ? (float) $balance : null;
     }
 }
