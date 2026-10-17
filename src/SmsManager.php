@@ -17,6 +17,7 @@ use AmdadulHaq\BdSms\Testing\SmsFake;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Manager;
 use InvalidArgumentException;
+use Override;
 
 /**
  * @mixin SmsSender
@@ -122,6 +123,7 @@ class SmsManager extends Manager implements SmsDriver
      *
      * @param  string  $driver
      */
+    #[Override]
     protected function createDriver($driver): SmsSender
     {
         $resolved = parent::createDriver($driver);

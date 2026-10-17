@@ -20,7 +20,7 @@ return RectorConfig::configure()
         typeDeclarations: true,
         earlyReturn: true,
     )
-    ->withPhpSets(php82: true)
+    ->withPhpSets(php83: true)
     ->withImportNames(
         importDocBlockNames: false,
         removeUnusedImports: true

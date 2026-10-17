@@ -4,7 +4,7 @@
 [![GitHub Tests Action Status](https://img.shields.io/github/actions/workflow/status/amdad121/bd-sms-laravel/run-tests.yml?branch=main&label=tests&style=flat-square)](https://github.com/amdad121/bd-sms-laravel/actions?query=workflow%3Arun-tests+branch%3Amain)
 [![GitHub Code Style Action Status](https://img.shields.io/github/actions/workflow/status/amdad121/bd-sms-laravel/fix-php-code-style-issues.yml?branch=main&label=code%20style&style=flat-square)](https://github.com/amdad121/bd-sms-laravel/actions?query=workflow%3A"Fix+PHP+code+style+issues"+branch%3Amain)
 [![Total Downloads](https://img.shields.io/packagist/dt/amdadulhaq/bd-sms-laravel.svg?style=flat-square)](https://packagist.org/packages/amdadulhaq/bd-sms-laravel)
-[![PHP Version](https://img.shields.io/badge/PHP-8.2%2B-777BB4?style=flat-square&logo=php)](https://php.net)
+[![PHP Version](https://img.shields.io/badge/PHP-8.3%2B-777BB4?style=flat-square&logo=php)](https://php.net)
 [![Laravel Version](https://img.shields.io/badge/Laravel-11%2F12%2F13-FF2D20?style=flat-square&logo=laravel)](https://laravel.com)
 [![Sponsor](https://img.shields.io/badge/Sponsor-%E2%9D%A4-pink?style=flat-square&logo=github)](https://github.com/sponsors/amdad121)
 
@@ -12,7 +12,7 @@ Send SMS from Laravel via Bangladeshi gateways (BulkSMSBD, MimSMS, SSL Wireless,
 
 ## Requirements
 
-- PHP 8.2, 8.3, 8.4, or 8.5
+- PHP 8.3, 8.4, or 8.5
 - Laravel 12 or 13
 
 ## Installation

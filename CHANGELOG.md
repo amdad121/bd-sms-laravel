@@ -2,6 +2,12 @@
 
 All notable changes to `bd-sms-laravel` will be documented in this file.
 
+## v2.0.1 - 2026-10-17
+
+### Changed
+
+- **Breaking:** requires PHP 8.3 or newer. v2.0.0 declared PHP 8.2 support but uses typed class constants, a PHP 8.3 feature, so it failed to load on 8.2. PHPStan now analyses against PHP 8.3, the minimum, so newer syntax is caught before release.
+
 ## v2.0.0 - 2026-10-17
 
 ### Added
