@@ -17,7 +17,7 @@ class SmsServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/../config/sms.php', 'sms');
 
-        $this->app->singleton(SmsManager::class, fn ($app): SmsManager => new SmsManager($app));
+        $this->app->singleton(SmsManager::class);
 
         $this->app->bind(SmsDriver::class, fn ($app): SmsDriver => $app->make(SmsManager::class));
 
